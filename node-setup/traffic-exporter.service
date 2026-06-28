@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 EnvironmentFile=/etc/grafana-netobs/traffic-exporter.env
 WorkingDirectory=/opt/grafana-network-observability-platform/exporters/traffic_exporter
-ExecStart=/usr/bin/python3 /opt/grafana-network-observability-platform/exporters/traffic_exporter/main.py
+ExecStart=/opt/grafana-netobs-venv/bin/python /opt/grafana-network-observability-platform/exporters/traffic_exporter/main.py
 Restart=always
 RestartSec=3
 
