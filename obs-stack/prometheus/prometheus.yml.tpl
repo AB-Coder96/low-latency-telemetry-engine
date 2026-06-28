@@ -17,14 +17,14 @@ scrape_configs:
   - job_name: node
     static_configs:
       - targets:
-          - "${EC2_A_HOST}:${NODE_EXPORTER_PORT}"
+          - "${EC2_A_PRIVATE_IP}:${NODE_EXPORTER_PORT}"
         labels:
           device: ec2-a-tx
           role: sender
           device_type: linux_host
 
       - targets:
-          - "${EC2_B_HOST}:${NODE_EXPORTER_PORT}"
+          - "${EC2_B_PRIVATE_IP}:${NODE_EXPORTER_PORT}"
         labels:
           device: ec2-b-rx
           role: receiver
@@ -33,7 +33,7 @@ scrape_configs:
   - job_name: traffic
     static_configs:
       - targets:
-          - "${EC2_A_HOST}:${TRAFFIC_EXPORTER_PORT}"
+          - "${EC2_A_PRIVATE_IP}:${TRAFFIC_EXPORTER_PORT}"
         labels:
           device: ec2-a-tx
           role: sender
@@ -41,9 +41,19 @@ scrape_configs:
           flow: ec2-a-tx-to-ec2-b-rx
 
       - targets:
-          - "${EC2_B_HOST}:${TRAFFIC_EXPORTER_PORT}"
+          - "${EC2_B_PRIVATE_IP}:${TRAFFIC_EXPORTER_PORT}"
         labels:
           device: ec2-b-rx
           role: receiver
           device_type: linux_host
           flow: ec2-a-tx-to-ec2-b-rx
+
+  - job_name: hardware-telemetry-replay
+    static_configs:
+      - targets:
+          - "hardware-telemetry-replay:${HARDWARE_REPLAY_EXPORTER_PORT}"
+        labels:
+          device: hardware-telemetry-replay
+          role: telemetry_replay
+          device_type: simulated_hardware
+          source: simulated

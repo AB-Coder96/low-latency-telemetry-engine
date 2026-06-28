@@ -35,6 +35,23 @@ services:
     volumes:
       - prometheus-data:/prometheus
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - hardware-telemetry-replay
+
+  hardware-telemetry-replay:
+    build:
+      context: ..
+      dockerfile: exporters/hardware_telemetry_replay/Dockerfile
+    container_name: hardware-telemetry-replay
+    restart: unless-stopped
+    environment:
+      EXPORTER_HOST: 0.0.0.0
+      EXPORTER_PORT: ${HARDWARE_REPLAY_EXPORTER_PORT}
+      SITE: low-latency-lab
+      HARDWARE_REPLAY_SCENARIO: incident
+      HARDWARE_REPLAY_UPDATE_INTERVAL_SECONDS: 5
+    expose:
+      - "${HARDWARE_REPLAY_EXPORTER_PORT}"
 
 volumes:
   grafana-data:
