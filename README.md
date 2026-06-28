@@ -1,73 +1,101 @@
 # Grafana Network Observability Platform
 
-A reproducible observability platform for low-latency network and host telemetry. The project demonstrates how Grafana and Prometheus can be used to monitor Linux hosts, traffic flows, packet-performance signals, clock-synchronization health, and hardware-style network telemetry through real exporters and replay-driven data sources.
+A reproducible Grafana + Prometheus observability platform for Linux host telemetry, traffic-flow measurements, packet-performance indicators, clock-synchronization health, and hardware-style network telemetry.
 
-The platform is designed as a showcase and reference implementation for network observability workflows. It separates live host/flow measurements from simulated or replayed hardware telemetry so the same dashboard model can support real devices later.
-
----
-
-## What This Project Does
-
-This project provides a dashboard-driven observability environment for:
-
-- Linux host health
-- network interface counters
-- TCP/UDP traffic tests
-- throughput, latency, jitter, and packet loss
-- sequence-gap and packet-flow indicators
-- clock synchronization and PTP-style telemetry
-- switch-style queue and buffer telemetry
-- FPGA/NIC-style packet pipeline telemetry
-- incident replay and controlled telemetry spikes
-- dashboard provisioning and reproducible deployment
-
-The project is intentionally modular. Real telemetry sources can be used where available, while replayed or simulated telemetry can be used to demonstrate hardware-oriented panels without requiring specialized switches, FPGA NICs, or PTP-capable hardware.
+The project is built as a showcase and reference implementation for low-latency network observability workflows. It combines real Linux and traffic metrics with replay-driven hardware-style telemetry so the same dashboard model can support small cloud labs, larger Linux fleets, packet-capture nodes, switches, PTP clocks, and FPGA/NIC telemetry sources.
 
 ---
 
-## Reference Architecture
+## Project Summary
+
+This platform demonstrates:
+
+- Linux host monitoring across multiple nodes
+- network interface byte, packet, error, and drop counters
+- TCP/UDP traffic generation and measurement
+- throughput, RTT latency, UDP jitter, and UDP loss dashboards
+- packet-flow indicators such as sequence gaps and burst events
+- clock synchronization and PTP-style health panels
+- switch-style queue, buffer, and interface telemetry panels
+- FPGA/NIC-style packet pipeline telemetry panels
+- incident replay through controlled metric spikes
+- Grafana dashboard provisioning
+- Prometheus scrape configuration
+- Docker Compose runtime for the observability stack
+- CI validation for exporters, configuration, and dashboards
+
+---
+
+## Current Showcase Hardware and Network Layout
+
+The current reference deployment uses one existing public web node, one observability node, and two traffic nodes.
+
+| Host | Instance Type | OS | Network Role | Project Role | Main Services |
+|---|---:|---|---|---|---|
+| `ec2-web-proxy` | existing `t4g.nano` | existing Linux install | Public internet entry point | Reverse proxy for public Grafana access | Nginx, existing Django app, existing Postgres |
+| `ec2-obs` | `t4g.small` | Ubuntu Server 24.04 LTS ARM64 | Observability node | Metrics collection and visualization | Docker, Docker Compose, Grafana, Prometheus, demo hardware exporter |
+| `ec2-a-tx` | `t4g.nano` | Ubuntu Server 24.04 LTS ARM64 | Traffic node A | Sender and monitored Linux host | node_exporter, iperf3 client, traffic exporter, chrony |
+| `ec2-b-rx` | `t4g.nano` | Ubuntu Server 24.04 LTS ARM64 | Traffic node B | Receiver and monitored Linux host | node_exporter, iperf3 server, traffic exporter, chrony |
+
+Public access is provided through the existing Nginx node:
 
 ```text
-                         Public User
-                             |
-                             v
-                  Reverse Proxy / HTTPS Endpoint
-                             |
-                             v
-                    Grafana Observability UI
-                             |
-                             v
-                         Prometheus
-                             |
-        ------------------------------------------------
-        |                      |                       |
-        v                      v                       v
-  Linux Host Metrics     Traffic Metrics       Hardware-Style Metrics
-  node_exporter          traffic_exporter      demo_hardware_exporter
+Internet
+  ↓
+grafana.example.com
+  ↓
+ec2-web-proxy / Nginx / HTTPS
+  ↓
+ec2-obs:3000
+  ↓
+Grafana
 ```
 
-A typical lab deployment uses:
+Traffic measurements are generated between the two traffic nodes:
 
 ```text
-observability-node
-  Grafana
-  Prometheus
-  dashboard provisioning
-  Prometheus configuration
-  demo hardware telemetry exporter
-
-traffic-node-a
-  node_exporter
-  traffic exporter
-  traffic generator
-
-traffic-node-b
-  node_exporter
-  traffic exporter
-  traffic receiver
+ec2-a-tx  ───── TCP/UDP traffic tests ─────>  ec2-b-rx
 ```
 
-The traffic nodes are used to create measurable network flows, while the observability node collects, stores, and visualizes metrics.
+Prometheus scrapes the observability and traffic-node exporters:
+
+```text
+ec2-obs / Prometheus
+  ├── ec2-a-tx:9100     node_exporter
+  ├── ec2-b-rx:9100     node_exporter
+  ├── ec2-a-tx:9201     traffic_exporter
+  ├── ec2-b-rx:9201     traffic_exporter
+  └── demo_hardware_exporter:9202
+```
+
+---
+
+## Real and Replayed Telemetry
+
+The project separates real telemetry from replayed hardware-style telemetry.
+
+### Real Telemetry
+
+| Area | Source | Example Metrics |
+|---|---|---|
+| Host health | `node_exporter` | CPU, memory, disk, load average |
+| Network interfaces | Linux kernel counters through `node_exporter` | RX/TX bytes, RX/TX packets, drops, errors |
+| TCP/UDP traffic | `iperf3` and `traffic_exporter` | TCP throughput, UDP throughput, UDP jitter, UDP loss |
+| Latency | active probes from traffic nodes | RTT latency, service probe latency |
+| Clock sync | `chrony` parsed metrics | clock offset, frequency, skew |
+| Service health | Prometheus and exporters | target up/down, scrape duration, exporter uptime |
+
+### Replayed or Simulated Telemetry
+
+| Area | Source | Example Metrics |
+|---|---|---|
+| PTP / PHC | `demo_hardware_exporter` | offset, path delay, sync state, frequency adjustment |
+| Packet behavior | replay scenarios | sequence gaps, drops, jitter bursts, microburst indicators |
+| Switch telemetry | replay scenarios | queue drops, buffer utilization, interface counters |
+| FPGA / NIC telemetry | replay scenarios | pipeline latency, packet arrival rate, DMA queue depth |
+| Incidents | replay mode | clock spike, jitter burst, loss burst, queue-drop burst |
+
+Replayed metrics are labeled with `source="simulated"` so dashboards can distinguish demo hardware telemetry from live measurements.
 
 ---
 
@@ -75,53 +103,23 @@ The traffic nodes are used to create measurable network flows, while the observa
 
 | Layer | Technology | Function |
 |---|---|---|
-| Visualization | Grafana | Dashboards for host health, flow metrics, packet behavior, clock health, and replay events |
-| Metrics database | Prometheus | Time-series collection, scraping, querying, and short-term metric retention |
+| Visualization | Grafana | Dashboards for host, flow, packet, clock, switch, FPGA/NIC, and incident views |
+| Metrics database | Prometheus | Scraping, querying, alert-style evaluation, and short-retention time-series storage |
 | Host metrics | node_exporter | Linux CPU, memory, disk, load, filesystem, and network interface counters |
-| Traffic measurements | iperf3 | TCP/UDP throughput tests, UDP jitter, and packet loss measurement |
-| Custom telemetry | Python exporters | Prometheus-compatible exporters for traffic, replay, PTP-style, switch-style, and FPGA/NIC-style metrics |
-| Clock health | chrony / parsed clock metrics | Clock sync offset and frequency/skew visibility where available |
+| Traffic generation | iperf3 | TCP throughput, UDP throughput, UDP jitter, and UDP loss measurements |
+| Traffic exporter | Python | Converts traffic tests and probes into Prometheus metrics |
+| Hardware-style exporter | Python | Emits replayed PTP, switch, FPGA/NIC, and incident metrics |
+| Clock sync | chrony | Clock tracking and synchronization metrics where available |
+| Runtime | Docker Compose | Starts Grafana, Prometheus, and observability-node exporters |
 | Reverse proxy | Nginx | Public HTTPS access to Grafana without exposing Grafana directly |
-| Deployment | Docker Compose | Local and server runtime for Grafana, Prometheus, and exporters |
-| Automation | Ansible / shell scripts | Repeatable host setup and node bootstrap |
-| CI/CD | GitHub Actions | Test, lint, validate Prometheus config, validate dashboard JSON, and package deployment artifacts |
+| Automation | shell scripts / Ansible | Repeatable node setup and service installation |
+| CI/CD | GitHub Actions | Tests, linting, config validation, dashboard JSON validation, and manual deployment hooks |
 
 ---
 
-## Telemetry Sources
+## Metric Label Model
 
-### Real Telemetry
-
-The platform can collect real metrics from Linux hosts and traffic flows:
-
-| Metric Area | Examples |
-|---|---|
-| Host health | CPU usage, memory usage, disk usage, load average |
-| Network interfaces | RX/TX bytes, RX/TX packets, drops, errors |
-| Traffic flow | TCP throughput, UDP throughput, UDP jitter, UDP packet loss |
-| Latency | RTT latency from active probes |
-| Service health | Prometheus target state, exporter uptime, Grafana availability |
-| Clock sync | chrony tracking offset, skew, and frequency where configured |
-
-### Replayed or Simulated Telemetry
-
-The platform also includes replay-driven hardware-style telemetry:
-
-| Metric Area | Examples |
-|---|---|
-| PTP / PHC | offset, path delay, sync state, frequency adjustment |
-| Packet behavior | sequence gaps, packet drops, jitter bursts, microburst indicators |
-| Switch telemetry | queue drops, buffer utilization, interface counters, error counters |
-| FPGA / NIC telemetry | pipeline latency, packet arrival rate, DMA queue depth, packet drops |
-| Incident replay | controlled spikes for jitter, packet loss, clock offset, and queue drops |
-
-These simulated data sources are explicitly labeled in metrics and dashboards so readers can distinguish live measurements from replayed hardware-style signals.
-
----
-
-## Dashboard Model
-
-The dashboard design is based on consistent labels:
+Dashboards use consistent labels so the same panels can work across demo nodes and future hardware integrations.
 
 ```text
 device
@@ -136,20 +134,20 @@ job
 instance
 ```
 
-Example labels:
+Examples:
 
 ```text
-device="traffic-node-a"
+device="ec2-a-tx"
 role="sender"
 device_type="linux_host"
 
-device="traffic-node-b"
+device="ec2-b-rx"
 role="receiver"
 device_type="linux_host"
 
-flow="traffic-node-a-to-traffic-node-b"
-src_device="traffic-node-a"
-dst_device="traffic-node-b"
+flow="ec2-a-tx-to-ec2-b-rx"
+src_device="ec2-a-tx"
+dst_device="ec2-b-rx"
 
 device="demo-switch-1"
 device_type="switch"
@@ -158,9 +156,11 @@ source="simulated"
 device="demo-ptp-clock"
 device_type="ptp_clock"
 source="simulated"
-```
 
-This label model allows the same dashboards to support small demo deployments, larger Linux fleets, packet capture hosts, switches, PTP clocks, and future hardware telemetry integrations.
+device="demo-fpga-nic"
+device_type="fpga_nic"
+source="simulated"
+```
 
 ---
 
@@ -168,13 +168,13 @@ This label model allows the same dashboards to support small demo deployments, l
 
 | Dashboard | Purpose |
 |---|---|
-| Platform Overview | Grafana, Prometheus, exporter health, scrape status, and observability-node health |
-| Host Fleet Overview | CPU, memory, disk, load, network counters, drops, and errors by device |
+| Platform Overview | Grafana, Prometheus, exporter health, scrape status, and observability-node status |
+| Host Fleet Overview | CPU, memory, disk, load, network counters, errors, and drops by device |
 | Two-Node Traffic Lab | Sender/receiver traffic flow, throughput, RTT, UDP jitter, UDP loss, and NIC counters |
-| Packet Latency and Jitter | Packet-flow indicators, latency distribution, jitter, loss, sequence gaps, and bursts |
-| PTP Clock Health | Clock offset, sync state, path delay, frequency adjustment, and clock health indicators |
-| Switch and FPGA Telemetry | Queue drops, buffer utilization, interface counters, FPGA/NIC pipeline metrics |
-| Incident Replay | Controlled replay scenarios for packet loss, jitter spikes, PTP offset spikes, and queue drops |
+| Packet Latency and Jitter | Packet-flow indicators, latency, jitter, loss, sequence gaps, and burst events |
+| PTP Clock Health | Clock offset, sync state, path delay, frequency adjustment, and PTP-style health |
+| Switch and FPGA Telemetry | Queue drops, buffer utilization, switch counters, and FPGA/NIC pipeline metrics |
+| Incident Replay | Replay scenarios for packet loss, jitter spikes, PTP offset spikes, and queue drops |
 
 ---
 
@@ -223,7 +223,7 @@ Contains the runtime observability stack:
 - Prometheus scrape configuration
 - Grafana datasource provisioning
 - Grafana dashboard provisioning
-- exporter service definitions used by the observability node
+- observability-node exporter services
 
 ### `exporters/traffic_exporter/`
 
@@ -231,13 +231,13 @@ Exposes traffic-flow metrics in Prometheus format.
 
 Primary responsibilities:
 
-- run or parse active traffic tests
+- run or parse traffic tests
 - expose RTT latency
 - expose TCP throughput
 - expose UDP throughput
 - expose UDP jitter
 - expose UDP loss percentage
-- expose sequence-gap style counters when using generated traffic payloads
+- expose sequence-gap style counters when generated payloads are used
 
 ### `exporters/demo_hardware_exporter/`
 
@@ -249,7 +249,7 @@ Primary responsibilities:
 - emit switch-style queue and buffer metrics
 - emit FPGA/NIC-style pipeline metrics
 - replay controlled incident scenarios
-- label all replayed data clearly as simulated
+- label replayed data as simulated
 
 ### `node-setup/`
 
@@ -260,7 +260,7 @@ Primary responsibilities:
 - install node_exporter
 - install iperf3
 - install chrony
-- configure traffic sender or receiver services
+- configure traffic sender and receiver services
 - configure exporter services
 
 ### `deploy/nginx/`
@@ -271,7 +271,7 @@ Primary responsibilities:
 
 - route public Grafana traffic through Nginx
 - keep Grafana behind the reverse proxy
-- document required headers for Grafana WebSocket support
+- include headers needed for Grafana and WebSocket support
 
 ### `.github/workflows/`
 
@@ -284,7 +284,7 @@ Primary responsibilities:
 - validate Prometheus configuration
 - validate Grafana dashboard JSON
 - validate shell scripts
-- optionally run manual deployment workflows
+- provide manual deployment workflows
 
 ---
 
@@ -300,8 +300,6 @@ make test
 make demo
 ```
 
-Expected behavior:
-
 | Command | Function |
 |---|---|
 | `make up` | Start the observability stack |
@@ -314,19 +312,16 @@ Expected behavior:
 
 ## Deployment Model
 
-The project uses a single repository and separate runtime roles.
+This project uses a single repository and separate runtime roles.
 
 ```text
 single Git repository
-  |
-  |-- observability node deployment
-  |-- traffic node setup scripts
-  |-- exporter source code
-  |-- dashboard definitions
-  |-- CI/CD validation
+  ├── observability-node deployment
+  ├── traffic-node setup scripts
+  ├── exporter source code
+  ├── dashboard definitions
+  └── CI/CD validation
 ```
-
-Each host does not need its own repository. The repository contains all application code, configuration, scripts, dashboards, and deployment logic.
 
 Recommended workflow:
 
@@ -348,29 +343,18 @@ Manual deployment is preferred for the showcase environment so a bad commit does
 
 ---
 
-## Real vs Hardware-Ready Scope
+## Operating System Choice
 
-This project distinguishes between:
+The current reference deployment uses **Ubuntu Server 24.04 LTS ARM64** for the new project nodes.
 
-```text
-real telemetry
-  Linux host metrics
-  network interface counters
-  traffic throughput
-  UDP jitter/loss
-  RTT latency
-  Prometheus target health
+Ubuntu is used for the MVP because the setup is simple and consistent across the observability and traffic nodes:
 
-hardware-ready telemetry
-  PTP/PHC state
-  switch queue and buffer counters
-  FPGA/NIC packet pipeline counters
-  nanosecond packet timestamp metrics
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose-plugin prometheus-node-exporter iperf3 chrony python3 python3-venv
 ```
 
-Hardware-ready telemetry is represented through replayed or simulated exporters unless real hardware or supported cloud features are connected.
-
-This keeps the project reproducible while preserving the same metric names, labels, and dashboards that real integrations would use.
+Amazon Linux 2023 is also a good option for AWS-native experiments, especially when testing newer ENA, PHC, or EC2-specific networking features. For this showcase project, Ubuntu keeps package names, installation scripts, and CI assumptions straightforward.
 
 ---
 
@@ -388,7 +372,7 @@ The project can be extended with:
 - containerlab and FRRouting for topology simulation
 - Ansible/AWX for fleet deployment
 
-These extensions are intentionally separate from the base stack so the core platform remains easy to run.
+These extensions are separate from the base stack so the core platform remains easy to run.
 
 ---
 
