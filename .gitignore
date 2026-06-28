@@ -35,3 +35,7 @@ Thumbs.db
 *.key
 *.crt
 secrets/
+
+
+# Generated configs
+obs-stack/prometheus/prometheus.yml
