@@ -1,17 +1,29 @@
-# exporters/traffic_exporter/main.py
-
 #!/usr/bin/env python3
 
 from __future__ import annotations
 
-import json
 import os
-import re
 import subprocess
 import time
-from typing import Any
 
 from prometheus_client import Gauge, start_http_server
+
+try:
+    from exporters.traffic_exporter.iperf import (
+        bits_to_mbps,
+        extract_tcp_throughput_mbps,
+        extract_udp_metrics,
+        parse_json,
+    )
+    from exporters.traffic_exporter.ping import parse_ping_metrics
+except ModuleNotFoundError:
+    from iperf import (
+        bits_to_mbps,
+        extract_tcp_throughput_mbps,
+        extract_udp_metrics,
+        parse_json,
+    )
+    from ping import parse_ping_metrics
 
 
 NODE_NAME = os.getenv("NODE_NAME", "unknown-node")
@@ -30,16 +42,20 @@ UPDATE_INTERVAL_SECONDS = int(os.getenv("TRAFFIC_EXPORTER_UPDATE_INTERVAL_SECOND
 def peer_device_name() -> str:
     if NODE_ROLE == "sender":
         return "ec2-b-rx"
+
     if NODE_ROLE == "receiver":
         return "ec2-a-tx"
+
     return "unknown-peer"
 
 
 def flow_name() -> str:
     if NODE_ROLE == "sender":
         return f"{NODE_NAME}-to-{peer_device_name()}"
+
     if NODE_ROLE == "receiver":
         return f"{peer_device_name()}-to-{NODE_NAME}"
+
     return "unknown-flow"
 
 
@@ -119,8 +135,11 @@ def run_command(command: list[str], timeout: int) -> tuple[int, str, str]:
             check=False,
         )
         return completed.returncode, completed.stdout, completed.stderr
+
     except subprocess.TimeoutExpired as exc:
-        return 124, exc.stdout or "", exc.stderr or "command timed out"
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else "command timed out"
+        return 124, stdout, stderr
 
 
 def run_ping() -> None:
@@ -144,30 +163,17 @@ def run_ping() -> None:
         timeout=(PING_COUNT * PING_TIMEOUT_SECONDS) + 5,
     )
 
-    loss_match = re.search(r"(\d+(?:\.\d+)?)% packet loss", stdout)
-    rtt_match = re.search(
-        r"rtt min/avg/max/(?:mdev|stddev) = [\d.]+/([\d.]+)/[\d.]+/[\d.]+ ms",
-        stdout,
-    )
+    ping_metrics = parse_ping_metrics(stdout)
 
-    if loss_match:
-        flow_ping_packet_loss_percent.labels(**metric_labels).set(float(loss_match.group(1)))
+    if "packet_loss_percent" in ping_metrics:
+        flow_ping_packet_loss_percent.labels(**metric_labels).set(
+            ping_metrics["packet_loss_percent"]
+        )
 
-    if rtt_match:
-        flow_rtt_ms.labels(**metric_labels).set(float(rtt_match.group(1)))
+    if "rtt_ms" in ping_metrics:
+        flow_rtt_ms.labels(**metric_labels).set(ping_metrics["rtt_ms"])
 
     flow_test_success.labels(**metric_labels, test="ping").set(1 if code == 0 else 0)
-
-
-def parse_json(stdout: str) -> dict[str, Any] | None:
-    try:
-        return json.loads(stdout)
-    except json.JSONDecodeError:
-        return None
-
-
-def bits_to_mbps(bits_per_second: float) -> float:
-    return bits_per_second / 1_000_000.0
 
 
 def run_iperf_tcp() -> None:
@@ -198,16 +204,9 @@ def run_iperf_tcp() -> None:
         flow_test_success.labels(**metric_labels, test="iperf_tcp").set(0)
         return
 
-    end = payload.get("end", {})
-    summary = (
-        end.get("sum_sent")
-        or end.get("sum_received")
-        or end.get("sum")
-        or {}
+    flow_tcp_throughput_mbps.labels(**metric_labels).set(
+        extract_tcp_throughput_mbps(payload)
     )
-
-    bps = float(summary.get("bits_per_second", 0.0))
-    flow_tcp_throughput_mbps.labels(**metric_labels).set(bits_to_mbps(bps))
     flow_test_success.labels(**metric_labels, test="iperf_tcp").set(1)
 
 
@@ -242,16 +241,13 @@ def run_iperf_udp() -> None:
         flow_test_success.labels(**metric_labels, test="iperf_udp").set(0)
         return
 
-    end = payload.get("end", {})
-    summary = end.get("sum") or end.get("sum_received") or {}
+    udp_metrics = extract_udp_metrics(payload)
 
-    bps = float(summary.get("bits_per_second", 0.0))
-    jitter_ms = float(summary.get("jitter_ms", 0.0))
-    lost_percent = float(summary.get("lost_percent", 0.0))
-
-    flow_udp_throughput_mbps.labels(**metric_labels).set(bits_to_mbps(bps))
-    flow_udp_jitter_ms.labels(**metric_labels).set(jitter_ms)
-    flow_udp_loss_percent.labels(**metric_labels).set(lost_percent)
+    flow_udp_throughput_mbps.labels(**metric_labels).set(
+        udp_metrics["throughput_mbps"]
+    )
+    flow_udp_jitter_ms.labels(**metric_labels).set(udp_metrics["jitter_ms"])
+    flow_udp_loss_percent.labels(**metric_labels).set(udp_metrics["loss_percent"])
     flow_test_success.labels(**metric_labels, test="iperf_udp").set(1)
 
 
@@ -265,7 +261,9 @@ def update_loop() -> None:
         run_iperf_tcp()
         run_iperf_udp()
 
-        traffic_exporter_last_update_timestamp_seconds.labels(**metric_labels).set(time.time())
+        traffic_exporter_last_update_timestamp_seconds.labels(**metric_labels).set(
+            time.time()
+        )
 
         time.sleep(UPDATE_INTERVAL_SECONDS)
 
