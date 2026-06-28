@@ -1,0 +1,70 @@
+name: Manual Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy observability stack
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to observability node
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_OBS_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            cd ~/low-latency-telemetry-engine
+
+            git pull --ff-only
+
+            python3 scripts/render_prometheus_config.py
+
+            cd obs-stack
+            docker compose --env-file ../.env up -d --build
+            docker compose --env-file ../.env ps
+
+  restart-traffic-nodes:
+    name: Restart traffic nodes
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    steps:
+      - name: Restart TX node exporter services
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_TX_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            cd ~/low-latency-telemetry-engine
+
+            git pull --ff-only
+
+            sudo systemctl restart traffic-exporter
+            sudo systemctl status traffic-exporter --no-pager
+
+      - name: Restart RX node exporter services
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_RX_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+
+            cd ~/low-latency-telemetry-engine
+
+            git pull --ff-only
+
+            sudo systemctl restart traffic-exporter
+            sudo systemctl restart iperf3-server
+
+            sudo systemctl status traffic-exporter --no-pager
+            sudo systemctl status iperf3-server --no-pager
