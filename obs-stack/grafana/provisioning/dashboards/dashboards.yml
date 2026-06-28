@@ -1,0 +1,14 @@
+# obs-stack/grafana/provisioning/dashboards/dashboards.yml
+
+apiVersion: 1
+
+providers:
+  - name: Network Observability
+    orgId: 1
+    folder: Network Observability
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
