@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Logs/runtime
+*.log
+logs/
+tmp/
+data/
+
+# Docker volumes / runtime state
+grafana-storage/
+prometheus-data/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets and keys
+*.pem
+*.key
+*.crt
+secrets/
