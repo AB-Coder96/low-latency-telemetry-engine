@@ -1,0 +1,15 @@
+# node-setup/iperf3-server.service
+
+[Unit]
+Description=iperf3 server for Grafana Network Observability Platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/iperf3 -s -p 5201
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

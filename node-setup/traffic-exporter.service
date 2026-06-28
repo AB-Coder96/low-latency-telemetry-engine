@@ -1,0 +1,15 @@
+[Unit]
+Description=Traffic exporter for Grafana Network Observability Platform
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/grafana-netobs/traffic-exporter.env
+WorkingDirectory=/opt/grafana-network-observability-platform/exporters/traffic_exporter
+ExecStart=/usr/bin/python3 /opt/grafana-network-observability-platform/exporters/traffic_exporter/main.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
