@@ -1,9 +1,8 @@
-# obs-stack/grafana/provisioning/datasources/prometheus.yml
-
 apiVersion: 1
 
 datasources:
   - name: Prometheus
+    uid: Prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
