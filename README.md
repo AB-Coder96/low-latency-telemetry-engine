@@ -9,62 +9,6 @@ A reproducible Grafana/Prometheus low-latency observability lab across EC2 Linux
 ![Low-Latency Telemetry Engine dashboard preview](docs/screenshots/thumbnail.png)
 
 ---
-
-## Dashboards
-
----
-
-### Platform Overview
-
-The Platform Overview dashboard shows whether the observability platform is healthy. It tracks Prometheus target health, exporter status, and traffic test success.
-
-Live Link: [Open Platform Overview](https://obs.zetaslate.com/d/platform-overview/platform-overview?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
-
-![Platform Overview](docs/screenshots/platform-overview.png)
-
-### Two-Node Traffic Lab
-
-The Two-Node Traffic Lab dashboard shows live TX → RX network behavior, including TCP throughput, UDP throughput, UDP jitter, UDP loss, RTT latency, and ping loss.
-
-Live Link: [Open Two-Node Traffic Lab](https://obs.zetaslate.com/d/two-node-traffic-lab/two-node-traffic-lab?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
-
-![Two-Node Traffic Lab](docs/screenshots/two-node-traffic-lab.png)
-
-### PTP / Switch / FPGA Telemetry
-
-The hardware telemetry dashboard replays hardware-style metrics that are commonly important in low-latency systems, including PTP offset, switch microbursts, queue drops, and FPGA/NIC pipeline latency.
-
-Live Link: [Open PTP / Switch / FPGA Telemetry](https://obs.zetaslate.com/d/hardware-telemetry/ptp-switch-fpga-telemetry?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
-
-![PTP / Switch / FPGA Telemetry](docs/screenshots/hardware-telemetry.png)
-
-### Incident Replay
-
-The Incident Replay dashboard shows a simulated incident timeline where latency, PTP offset, switch drops, microbursts, and FPGA/NIC pipeline latency move together.
-
-Live Link: [Open Incident Replay](https://obs.zetaslate.com/d/incident-replay/incident-replay?orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s)
-
-![Incident Replay](docs/screenshots/incident-replay.png)
-
----
-
-## What This Project Demonstrates
-
-This project demonstrates a practical observability workflow for low-latency systems:
-
-- Real EC2-to-EC2 TCP throughput testing with `iperf3`
-- Real EC2-to-EC2 UDP throughput testing with `iperf3`
-- UDP jitter and packet-loss measurement
-- RTT latency and ICMP packet-loss measurement
-- Linux host metrics through `node_exporter`
-- Custom Python Prometheus exporters
-- Replayed hardware-style telemetry for PTP, switch, and FPGA/NIC behavior
-- Grafana dashboards provisioned as code
-- Prometheus scrape configuration generated from environment variables
-- Public HTTPS Grafana access through an Nginx reverse proxy
-
----
-
 ## Architecture
 
 ```text
@@ -153,6 +97,62 @@ Architecture
 | `main-nginx` | Public reverse proxy | Dockerized Nginx, Certbot TLS, private proxy to Grafana, Postgres and Django for zetaslate.com
 
 ---
+## Dashboards
+
+---
+
+### Platform Overview
+
+The Platform Overview dashboard shows whether the observability platform is healthy. It tracks Prometheus target health, exporter status, and traffic test success.
+
+Live Link: [Open Platform Overview](https://obs.zetaslate.com/d/platform-overview/platform-overview?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
+
+![Platform Overview](docs/screenshots/platform-overview.png)
+
+### Two-Node Traffic Lab
+
+The Two-Node Traffic Lab dashboard shows live TX → RX network behavior, including TCP throughput, UDP throughput, UDP jitter, UDP loss, RTT latency, and ping loss.
+
+Live Link: [Open Two-Node Traffic Lab](https://obs.zetaslate.com/d/two-node-traffic-lab/two-node-traffic-lab?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
+
+![Two-Node Traffic Lab](docs/screenshots/two-node-traffic-lab.png)
+
+### PTP / Switch / FPGA Telemetry
+
+The hardware telemetry dashboard replays hardware-style metrics that are commonly important in low-latency systems, including PTP offset, switch microbursts, queue drops, and FPGA/NIC pipeline latency.
+
+Live Link: [Open PTP / Switch / FPGA Telemetry](https://obs.zetaslate.com/d/hardware-telemetry/ptp-switch-fpga-telemetry?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
+
+![PTP / Switch / FPGA Telemetry](docs/screenshots/hardware-telemetry.png)
+
+### Incident Replay
+
+The Incident Replay dashboard shows a simulated incident timeline where latency, PTP offset, switch drops, microbursts, and FPGA/NIC pipeline latency move together.
+
+Live Link: [Open Incident Replay](https://obs.zetaslate.com/d/incident-replay/incident-replay?orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s)
+
+![Incident Replay](docs/screenshots/incident-replay.png)
+
+---
+
+## What This Project Demonstrates
+
+This project demonstrates a practical observability workflow for low-latency systems:
+
+- Real EC2-to-EC2 TCP throughput testing with `iperf3`
+- Real EC2-to-EC2 UDP throughput testing with `iperf3`
+- UDP jitter and packet-loss measurement
+- RTT latency and ICMP packet-loss measurement
+- Linux host metrics through `node_exporter`
+- Custom Python Prometheus exporters
+- Replayed hardware-style telemetry for PTP, switch, and FPGA/NIC behavior
+- Grafana dashboards provisioned as code
+- Prometheus scrape configuration generated from environment variables
+- Public HTTPS Grafana access through an Nginx reverse proxy
+
+---
+
+
 ## Metrics Collected
 
 | Metric | Meaning |
