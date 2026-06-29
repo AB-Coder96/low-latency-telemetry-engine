@@ -4,38 +4,45 @@ A reproducible Grafana/Prometheus observability lab for low-latency network tele
 
 The platform tracks real TCP/UDP throughput, RTT latency, UDP jitter/loss, Linux host metrics, and replayed hardware-style telemetry for PTP, switch, and FPGA/NIC behavior. It is designed to look and operate like a realistic low-latency observability environment, not a toy dashboard.
 
-[Live Grafana Demo](https://obs.zetaslate.com) · [GitHub Repository](https://github.com/AB-Coder96/low-latency-telemetry-engine)
+[Live Grafana Demo](https://obs.zetaslate.com)
 
 ![Low-Latency Telemetry Engine dashboard preview](docs/screenshots/thumbnail.png)
 
 ---
 
-## Live Dashboards
-
-| Dashboard | What it shows | Link |
-|---|---|---|
-| Platform Overview | Prometheus scrape health, target status, exporter health, and traffic test success | [Open dashboard](https://obs.zetaslate.com/d/platform-overview/platform-overview?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s) |
-| Two-Node Traffic Lab | TCP throughput, UDP throughput, UDP jitter, UDP loss, RTT, and ping loss | [Open dashboard](https://obs.zetaslate.com/d/two-node-traffic-lab/two-node-traffic-lab?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s) |
-| PTP / Switch / FPGA Telemetry | Replayed PTP offset, switch drops, packet microbursts, and FPGA/NIC latency | [Open dashboard](https://obs.zetaslate.com/d/hardware-telemetry/ptp-switch-fpga-telemetry?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s) |
-| Incident Replay | Simulated incident timeline showing latency spikes, PTP offset movement, microbursts, and drops | [Open dashboard](https://obs.zetaslate.com/d/incident-replay/incident-replay?orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s) |
+## Dashboards
 
 ---
 
-## Screenshots
-
 ### Platform Overview
+
+Prometheus scrape health, target status, exporter health, replay state, and traffic test success.
+
+[Open Platform Overview](https://obs.zetaslate.com/d/platform-overview/platform-overview?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
 
 ![Platform Overview](docs/screenshots/platform-overview.png)
 
 ### Two-Node Traffic Lab
 
+Real TX → RX TCP throughput, UDP throughput, UDP jitter, UDP loss, RTT, and ping loss.
+
+[Open Two-Node Traffic Lab](https://obs.zetaslate.com/d/two-node-traffic-lab/two-node-traffic-lab?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
+
 ![Two-Node Traffic Lab](docs/screenshots/two-node-traffic-lab.png)
 
 ### PTP / Switch / FPGA Telemetry
 
+Replayed hardware-style telemetry for PTP offset, switch buffer utilization, queue drops, sequence gaps, packet counters, microbursts, and FPGA/NIC latency.
+
+[Open PTP / Switch / FPGA Telemetry](https://obs.zetaslate.com/d/hardware-telemetry/ptp-switch-fpga-telemetry?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
+
 ![PTP / Switch / FPGA Telemetry](docs/screenshots/hardware-telemetry.png)
 
 ### Incident Replay
+
+Simulated incident timeline showing how PTP offset, microbursts, drops, sequence gaps, and FPGA/NIC latency move together.
+
+[Open Incident Replay](https://obs.zetaslate.com/d/incident-replay/incident-replay?orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s)
 
 ![Incident Replay](docs/screenshots/incident-replay.png)
 
@@ -97,7 +104,7 @@ Prometheus on ec2-obs
 | `ec2-obs` | Observability node | Prometheus, Grafana, hardware telemetry replay exporter |
 | `ec2-a-tx` | Traffic sender | `node_exporter`, custom traffic exporter, `iperf3` client tests |
 | `ec2-b-rx` | Traffic receiver | `node_exporter`, custom traffic exporter, `iperf3` server |
-| `main-nginx` | Public reverse proxy | Dockerized Nginx, Certbot TLS, private proxy to Grafana |
+| `main-nginx` | Public reverse proxy | Dockerized Nginx, Certbot TLS, private proxy to Grafana, Postgres and Django for zetaslate.com
 
 ---
 
@@ -149,59 +156,6 @@ The MVP runs across EC2 Linux nodes:
 3. `ec2-b-rx` runs `node_exporter`, the custom traffic exporter, and an `iperf3` server.
 4. Prometheus scrapes all exporters.
 5. Grafana visualizes platform health, traffic metrics, and replayed hardware telemetry.
-6. Nginx exposes Grafana publicly over HTTPS at `https://obs.zetaslate.com`.
+6. At `main-nginx` Nginx exposes Grafana publicly over HTTPS at `https://obs.zetaslate.com`.
 
 ---
-
-## Local Repository Layout
-
-```text
-.
-├── exporters/
-│   ├── traffic_exporter/
-│   └── hardware_telemetry_replay/
-├── grafana/
-│   └── provisioning/
-├── node-setup/
-│   ├── install_tx_node.sh
-│   ├── install_rx_node.sh
-│   ├── traffic-exporter.service
-│   └── iperf3-server.service
-├── obs-stack/
-│   └── docker-compose.yml
-├── prometheus/
-├── scripts/
-└── docs/
-    └── screenshots/
-```
-
----
-
-## MVP Validation
-
-The MVP was validated when:
-
-- Grafana was reachable over HTTPS
-- Prometheus showed all expected scrape targets up
-- `ec2-a-tx` and `ec2-b-rx` node exporters were up
-- `ec2-a-tx` and `ec2-b-rx` traffic exporters were up
-- TCP throughput appeared in Grafana
-- UDP throughput appeared in Grafana
-- UDP jitter and loss appeared in Grafana
-- RTT and ping loss appeared in Grafana
-- Hardware replay metrics appeared in Grafana
-- Incident replay metrics appeared in Grafana
-
----
-
-## Important Scope Note
-
-This MVP uses real Linux host metrics and real EC2-to-EC2 traffic measurements. PTP, switch, and FPGA/NIC telemetry are simulated/replayed to model hardware-style observability behavior.
-
-This project does not claim to use physical PTP hardware, production switches, or real FPGA devices.
-
----
-
-## Resume Description
-
-Built a reproducible Grafana/Prometheus low-latency observability lab across EC2 Linux nodes. Implemented custom Python exporters for TCP/UDP throughput, RTT latency, UDP jitter/loss, Linux host metrics, and replayed hardware-style telemetry for PTP offset, switch drops, microbursts, and FPGA/NIC pipeline latency. Deployed Grafana behind an HTTPS Nginx reverse proxy, provisioned dashboards, and validated Prometheus scrape health across traffic and observability nodes.
