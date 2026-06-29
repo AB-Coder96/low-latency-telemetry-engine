@@ -85,7 +85,7 @@ Architecture
                    │                                                                │
                    └──────────── ICMP ping / RTT / packet loss ────────────────────►│
 
-```text
+```
 
 ---
 
