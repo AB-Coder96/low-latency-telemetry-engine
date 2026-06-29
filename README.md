@@ -87,6 +87,8 @@ Architecture
 
 ```text
 
+---
+
 ## EC2 Nodes
 
 | Node | Role | Main services |
