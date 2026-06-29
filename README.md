@@ -1,180 +1,123 @@
-# Grafana Network Observability Platform
+# Low-Latency Telemetry Engine
 
-A reproducible Grafana + Prometheus observability platform for Linux host telemetry, traffic-flow measurements, packet-performance indicators, clock-synchronization health, and hardware-style network telemetry.
+A reproducible Grafana + Prometheus observability lab for low-latency network telemetry across two EC2 Linux nodes.
 
-The project is built as a showcase and reference implementation for low-latency network observability workflows. It combines real Linux and traffic metrics with replay-driven hardware-style telemetry so the same dashboard model can support small cloud labs, larger Linux fleets, packet-capture nodes, switches, PTP clocks, and FPGA/NIC telemetry sources.
+This project monitors real EC2 host metrics, TCP/UDP throughput, RTT latency, UDP jitter/loss, and replayed hardware-style telemetry for PTP offset, switch queue pressure, packet drops, microbursts, and FPGA/NIC pipeline behavior.
 
----
+## Live Grafana Dashboards
 
-## Project Summary
-
-This platform demonstrates:
-
-- Linux host monitoring across multiple nodes
-- network interface byte, packet, error, and drop counters
-- TCP/UDP traffic generation and measurement
-- throughput, RTT latency, UDP jitter, and UDP loss dashboards
-- packet-flow indicators such as sequence gaps and burst events
-- clock synchronization and PTP-style health panels
-- switch-style queue, buffer, and interface telemetry panels
-- FPGA/NIC-style packet pipeline telemetry panels
-- incident replay through controlled metric spikes
-- Grafana dashboard provisioning
-- Prometheus scrape configuration
-- Docker Compose runtime for the observability stack
-- CI validation for exporters, configuration, and dashboards
-
----
-
-## Current Showcase Hardware and Network Layout
-
-The current reference deployment uses one existing public web node, one observability node, and two traffic nodes.
-
-| Host | Instance Type | OS | Network Role | Project Role | Main Services |
-|---|---:|---|---|---|---|
-| `ec2-web-proxy` | existing `t4g.nano` | existing Linux install | Public internet entry point | Reverse proxy for public Grafana access | Nginx, existing Django app, existing Postgres |
-| `ec2-obs` | `t4g.small` | Ubuntu Server 24.04 LTS ARM64 | Observability node | Metrics collection and visualization | Docker, Docker Compose, Grafana, Prometheus, demo hardware exporter |
-| `ec2-a-tx` | `t4g.nano` | Ubuntu Server 24.04 LTS ARM64 | Traffic node A | Sender and monitored Linux host | node_exporter, iperf3 client, traffic exporter, chrony |
-| `ec2-b-rx` | `t4g.nano` | Ubuntu Server 24.04 LTS ARM64 | Traffic node B | Receiver and monitored Linux host | node_exporter, iperf3 server, traffic exporter, chrony |
-
-Public access is provided through the existing Nginx node:
+Grafana is deployed behind an HTTPS Nginx reverse proxy:
 
 ```text
-Internet
-  ↓
-grafana.example.com
-  ↓
-ec2-web-proxy / Nginx / HTTPS
-  ↓
-ec2-obs:3000
-  ↓
-Grafana
+https://obs.zetaslate.com
 ```
 
-Traffic measurements are generated between the two traffic nodes:
+Key dashboards:
 
-```text
-ec2-a-tx  ───── TCP/UDP traffic tests ─────>  ec2-b-rx
-```
+- [PTP / Switch / FPGA Telemetry](https://obs.zetaslate.com/d/hardware-telemetry/ptp-switch-fpga-telemetry?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s)
+- [Incident Replay](https://obs.zetaslate.com/d/incident-replay/incident-replay?orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s)
 
-Prometheus scrapes the observability and traffic-node exporters:
-
-```text
-ec2-obs / Prometheus
-  ├── ec2-a-tx:9100     node_exporter
-  ├── ec2-b-rx:9100     node_exporter
-  ├── ec2-a-tx:9201     traffic_exporter
-  ├── ec2-b-rx:9201     traffic_exporter
-  └── demo_hardware_exporter:9202
-```
 
 ---
 
-## Real and Replayed Telemetry
+## Architecture
 
-The project separates real telemetry from replayed hardware-style telemetry.
-
-### Real Telemetry
-
-| Area | Source | Example Metrics |
-|---|---|---|
-| Host health | `node_exporter` | CPU, memory, disk, load average |
-| Network interfaces | Linux kernel counters through `node_exporter` | RX/TX bytes, RX/TX packets, drops, errors |
-| TCP/UDP traffic | `iperf3` and `traffic_exporter` | TCP throughput, UDP throughput, UDP jitter, UDP loss |
-| Latency | active probes from traffic nodes | RTT latency, service probe latency |
-| Clock sync | `chrony` parsed metrics | clock offset, frequency, skew |
-| Service health | Prometheus and exporters | target up/down, scrape duration, exporter uptime |
-
-### Replayed or Simulated Telemetry
-
-| Area | Source | Example Metrics |
-|---|---|---|
-| PTP / PHC | `demo_hardware_exporter` | offset, path delay, sync state, frequency adjustment |
-| Packet behavior | replay scenarios | sequence gaps, drops, jitter bursts, microburst indicators |
-| Switch telemetry | replay scenarios | queue drops, buffer utilization, interface counters |
-| FPGA / NIC telemetry | replay scenarios | pipeline latency, packet arrival rate, DMA queue depth |
-| Incidents | replay mode | clock spike, jitter burst, loss burst, queue-drop burst |
-
-Replayed metrics are labeled with `source="simulated"` so dashboards can distinguish demo hardware telemetry from live measurements.
-
----
-
-## Technology Stack
-
-| Layer | Technology | Function |
-|---|---|---|
-| Visualization | Grafana | Dashboards for host, flow, packet, clock, switch, FPGA/NIC, and incident views |
-| Metrics database | Prometheus | Scraping, querying, alert-style evaluation, and short-retention time-series storage |
-| Host metrics | node_exporter | Linux CPU, memory, disk, load, filesystem, and network interface counters |
-| Traffic generation | iperf3 | TCP throughput, UDP throughput, UDP jitter, and UDP loss measurements |
-| Traffic exporter | Python | Converts traffic tests and probes into Prometheus metrics |
-| Hardware-style exporter | Python | Emits replayed PTP, switch, FPGA/NIC, and incident metrics |
-| Clock sync | chrony | Clock tracking and synchronization metrics where available |
-| Runtime | Docker Compose | Starts Grafana, Prometheus, and observability-node exporters |
-| Reverse proxy | Nginx | Public HTTPS access to Grafana without exposing Grafana directly |
-| Automation | shell scripts / Ansible | Repeatable node setup and service installation |
-| CI/CD | GitHub Actions | Tests, linting, config validation, dashboard JSON validation, and manual deployment hooks |
-
----
-
-## Metric Label Model
-
-Dashboards use consistent labels so the same panels can work across demo nodes and future hardware integrations.
+The MVP uses four EC2 roles:
 
 ```text
-device
-device_type
-role
-flow
-src_device
-dst_device
-interface
-source
-job
-instance
+main-nginx EC2
+  Public HTTPS reverse proxy
+  Routes obs.zetaslate.com to Grafana over the private VPC
+
+ec2-obs
+  Observability node
+  Runs Grafana, Prometheus, and the hardware telemetry replay exporter
+
+ec2-a-tx
+  Traffic sender node
+  Runs node_exporter and the custom traffic exporter
+  Sends TCP/UDP iperf3 traffic to ec2-b-rx
+
+ec2-b-rx
+  Traffic receiver node
+  Runs node_exporter, the custom traffic exporter, and iperf3 server
 ```
 
-Examples:
+Prometheus scrape flow:
 
 ```text
-device="ec2-a-tx"
-role="sender"
-device_type="linux_host"
+Prometheus on ec2-obs
+  -> ec2-a-tx:9100 node_exporter
+  -> ec2-b-rx:9100 node_exporter
+  -> ec2-a-tx:9201 traffic_exporter
+  -> ec2-b-rx:9201 traffic_exporter
+  -> hardware-telemetry-replay:9202
+```
 
-device="ec2-b-rx"
-role="receiver"
-device_type="linux_host"
+Traffic flow:
 
-flow="ec2-a-tx-to-ec2-b-rx"
-src_device="ec2-a-tx"
-dst_device="ec2-b-rx"
+```text
+ec2-a-tx -> TCP/UDP iperf3 tests -> ec2-b-rx
+```
 
-device="demo-switch-1"
-device_type="switch"
-source="simulated"
+Public access flow:
 
-device="demo-ptp-clock"
-device_type="ptp_clock"
-source="simulated"
-
-device="demo-fpga-nic"
-device_type="fpga_nic"
-source="simulated"
+```text
+Browser
+  -> https://obs.zetaslate.com
+  -> Nginx reverse proxy
+  -> Grafana on ec2-obs:3000
 ```
 
 ---
 
-## Planned Dashboards
+## What This Measures
 
-| Dashboard | Purpose |
-|---|---|
-| Platform Overview | Grafana, Prometheus, exporter health, scrape status, and observability-node status |
-| Host Fleet Overview | CPU, memory, disk, load, network counters, errors, and drops by device |
-| Two-Node Traffic Lab | Sender/receiver traffic flow, throughput, RTT, UDP jitter, UDP loss, and NIC counters |
-| Packet Latency and Jitter | Packet-flow indicators, latency, jitter, loss, sequence gaps, and burst events |
-| PTP Clock Health | Clock offset, sync state, path delay, frequency adjustment, and PTP-style health |
-| Switch and FPGA Telemetry | Queue drops, buffer utilization, switch counters, and FPGA/NIC pipeline metrics |
-| Incident Replay | Replay scenarios for packet loss, jitter spikes, PTP offset spikes, and queue drops |
+### Live EC2 node metrics
+
+Collected through Prometheus node_exporter:
+
+```text
+CPU usage
+Memory usage
+Disk usage
+Network receive/transmit throughput
+Node uptime
+Host availability
+```
+
+### Live traffic metrics
+
+Collected through the custom Python traffic exporter:
+
+```text
+traffic_exporter_up
+flow_rtt_ms
+flow_ping_packet_loss_percent
+flow_tcp_throughput_mbps
+flow_udp_throughput_mbps
+flow_udp_jitter_ms
+flow_udp_loss_percent
+flow_test_success
+traffic_exporter_last_update_timestamp_seconds
+```
+
+### Replayed hardware-style telemetry
+
+Collected through the hardware telemetry replay exporter:
+
+```text
+ptp_offset_ns
+ptp_lock_state
+switch_queue_depth_packets
+switch_packet_drops_total
+packet_microburst_active
+fpga_pipeline_latency_ns
+nic_rx_packets_total
+nic_tx_packets_total
+```
+
+The replay exporter makes the Grafana dashboards behave like a low-latency hardware observability platform without requiring physical PTP clocks, switches, or FPGA/NIC hardware.
 
 ---
 
@@ -182,212 +125,638 @@ source="simulated"
 
 ```text
 .
-├── README.md
-├── Makefile
-├── .env.example
 ├── deploy/
-│   ├── ansible/
-│   └── nginx/
 ├── docs/
-│   └── screenshots/
 ├── exporters/
-│   ├── traffic_exporter/
-│   └── demo_hardware_exporter/
+│   ├── hardware_telemetry_replay/
+│   └── traffic_exporter/
 ├── infra/
-│   └── ec2-notes/
 ├── node-setup/
 ├── obs-stack/
 │   ├── docker-compose.yml
-│   ├── prometheus/
-│   └── grafana/
-│       ├── provisioning/
-│       │   ├── dashboards/
-│       │   └── datasources/
-│       └── dashboards/
+│   ├── grafana/
+│   │   └── provisioning/
+│   │       ├── dashboards/
+│   │       └── datasources/
+│   └── prometheus/
 ├── scripts/
 ├── tests/
-└── .github/
-    └── workflows/
+├── Makefile
+├── README.md
+└── requirements-dev.txt
 ```
 
 ---
 
-## Component Responsibilities
+## Exporters
 
-### `obs-stack/`
+### Traffic Exporter
 
-Contains the runtime observability stack:
+Path:
 
-- Grafana service definition
-- Prometheus service definition
-- Prometheus scrape configuration
-- Grafana datasource provisioning
-- Grafana dashboard provisioning
-- observability-node exporter services
+```text
+exporters/traffic_exporter/
+```
 
-### `exporters/traffic_exporter/`
+The traffic exporter runs on both traffic nodes.
 
-Exposes traffic-flow metrics in Prometheus format.
+It performs:
 
-Primary responsibilities:
+```text
+ping test
+iperf3 TCP throughput test
+iperf3 UDP throughput / jitter / loss test
+```
 
-- run or parse traffic tests
-- expose RTT latency
-- expose TCP throughput
-- expose UDP throughput
-- expose UDP jitter
-- expose UDP loss percentage
-- expose sequence-gap style counters when generated payloads are used
+Default port:
 
-### `exporters/demo_hardware_exporter/`
+```text
+9201
+```
 
-Exposes hardware-style and replay-driven metrics in Prometheus format.
+Example metric:
 
-Primary responsibilities:
+```text
+traffic_exporter_up{device="ec2-a-tx",flow="ec2-a-tx-to-ec2-b-rx",peer="ec2-b-rx",role="sender"} 1
+```
 
-- emit PTP-style offset and sync metrics
-- emit switch-style queue and buffer metrics
-- emit FPGA/NIC-style pipeline metrics
-- replay controlled incident scenarios
-- label replayed data as simulated
+### Hardware Telemetry Replay Exporter
 
-### `node-setup/`
+Path:
 
-Contains setup scripts for traffic nodes.
+```text
+exporters/hardware_telemetry_replay/
+```
 
-Primary responsibilities:
+The replay exporter runs as part of the Docker Compose observability stack.
 
-- install node_exporter
-- install iperf3
-- install chrony
-- configure traffic sender and receiver services
-- configure exporter services
+Default port:
 
-### `deploy/nginx/`
+```text
+9202
+```
 
-Contains reverse proxy examples for publishing Grafana through HTTPS.
-
-Primary responsibilities:
-
-- route public Grafana traffic through Nginx
-- keep Grafana behind the reverse proxy
-- include headers needed for Grafana and WebSocket support
-
-### `.github/workflows/`
-
-Contains CI/CD workflows.
-
-Primary responsibilities:
-
-- run Python tests
-- validate Docker Compose configuration
-- validate Prometheus configuration
-- validate Grafana dashboard JSON
-- validate shell scripts
-- provide manual deployment workflows
+It emits simulated/replayed low-latency hardware telemetry for dashboards and incident playback.
 
 ---
 
-## Runtime Commands
+## Local Development
 
-The project targets these commands:
+Create a virtual environment:
 
 ```bash
-make up
-make down
-make validate
-make test
-make demo
+python3 -m venv .venv
+. .venv/bin/activate
 ```
 
-| Command | Function |
-|---|---|
-| `make up` | Start the observability stack |
-| `make down` | Stop the observability stack |
-| `make validate` | Validate configuration files |
-| `make test` | Run exporter and parser tests |
-| `make demo` | Start or trigger replay-driven demo telemetry |
+Install test dependencies:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
+```
+
+Run tests:
+
+```bash
+pytest
+```
+
+Run validation:
+
+```bash
+python3 scripts/render_prometheus_config.py
+python3 scripts/validate_stack.py
+```
 
 ---
 
-## Deployment Model
+## Observability Stack Deployment
 
-This project uses a single repository and separate runtime roles.
+Copy the example environment file:
 
-```text
-single Git repository
-  ├── observability-node deployment
-  ├── traffic-node setup scripts
-  ├── exporter source code
-  ├── dashboard definitions
-  └── CI/CD validation
+```bash
+cp .env.example .env
 ```
 
-Recommended workflow:
+Edit `.env`:
 
-```text
-push / pull request
-  -> run CI validation
-  -> test exporters
-  -> validate Prometheus config
-  -> validate Grafana dashboards
-
-manual deployment
-  -> update observability node
-  -> restart services
-  -> verify Prometheus targets
-  -> verify Grafana dashboards
+```bash
+nano .env
 ```
 
-Manual deployment is preferred for the showcase environment so a bad commit does not automatically break the public dashboard.
+Important values:
+
+```env
+GRAFANA_DOMAIN=obs.zetaslate.com
+GRAFANA_ROOT_URL=https://obs.zetaslate.com/
+
+EC2_A_PRIVATE_IP=<ec2-a-tx-private-ip>
+EC2_B_PRIVATE_IP=<ec2-b-rx-private-ip>
+
+NODE_EXPORTER_PORT=9100
+TRAFFIC_EXPORTER_PORT=9201
+HARDWARE_REPLAY_EXPORTER_PORT=9202
+
+PROMETHEUS_RETENTION_TIME=6h
+PROMETHEUS_RETENTION_SIZE=512MB
+```
+
+Render Prometheus config:
+
+```bash
+python3 scripts/render_prometheus_config.py
+```
+
+Start the stack:
+
+```bash
+cd obs-stack
+docker compose --env-file ../.env up -d --build
+```
+
+Check containers:
+
+```bash
+docker compose --env-file ../.env ps
+```
+
+Check Prometheus:
+
+```bash
+curl "http://localhost:9090/api/v1/query?query=up"
+```
+
+Check Grafana:
+
+```bash
+curl -I http://localhost:3000/login
+```
 
 ---
 
-## Operating System Choice
+## Traffic Node Deployment
 
-The current reference deployment uses **Ubuntu Server 24.04 LTS ARM64** for the new project nodes.
+Both traffic nodes need:
 
-Ubuntu is used for the MVP because the setup is simple and consistent across the observability and traffic nodes:
+```text
+prometheus-node-exporter
+iperf3
+chrony
+python3
+python3-venv
+python3-pip
+python-is-python3
+git
+curl
+iputils-ping
+```
+
+Install packages:
 
 ```bash
 sudo apt update
-sudo apt install -y docker.io docker-compose-plugin prometheus-node-exporter iperf3 chrony python3 python3-venv
+sudo apt install -y prometheus-node-exporter iperf3 chrony python3 python3-venv python3-pip python-is-python3 git curl htop iputils-ping
 ```
 
-Amazon Linux 2023 is also a good option for AWS-native experiments, especially when testing newer ENA, PHC, or EC2-specific networking features. For this showcase project, Ubuntu keeps package names, installation scripts, and CI assumptions straightforward.
+Enable node_exporter:
+
+```bash
+sudo systemctl enable prometheus-node-exporter
+sudo systemctl start prometheus-node-exporter
+```
+
+Enable chrony:
+
+```bash
+sudo systemctl enable chrony
+sudo systemctl start chrony
+```
+
+Clone the repo:
+
+```bash
+cd ~
+git clone git@github.com:<your-user>/low-latency-telemetry-engine.git
+cd low-latency-telemetry-engine
+```
+
+Create Python environment:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r exporters/traffic_exporter/requirements.txt
+```
 
 ---
 
-## Extension Points
+## TX Node Environment
 
-The project can be extended with:
+File:
 
-- ClickHouse for raw packet-event history
-- OpenTelemetry Collector for metric/log/trace routing
-- Loki or ELK/OpenSearch for log search
-- AWS VPC Traffic Mirroring for packet-capture workflows
-- gNMI or sFlow collectors for real switch telemetry
-- linuxptp exporters for real PTP/PHC environments
-- eBPF or AF_XDP exporters for deeper Linux packet-path metrics
-- containerlab and FRRouting for topology simulation
-- Ansible/AWX for fleet deployment
+```text
+/etc/traffic-exporter.env
+```
 
-These extensions are separate from the base stack so the core platform remains easy to run.
+Example for `ec2-a-tx`:
+
+```env
+NODE_NAME=ec2-a-tx
+NODE_ROLE=sender
+PEER_HOST=<ec2-b-rx-private-ip>
+EXPORTER_HOST=0.0.0.0
+EXPORTER_PORT=9201
+IPERF3_PORT=5201
+PING_COUNT=5
+PING_TIMEOUT_SECONDS=2
+IPERF3_DURATION_SECONDS=5
+IPERF3_UDP_BANDWIDTH=1M
+TRAFFIC_EXPORTER_UPDATE_INTERVAL_SECONDS=30
+```
 
 ---
 
-## Project Status
+## RX Node Environment
 
-This repository is under active development.
+File:
 
-Initial implementation goals:
+```text
+/etc/traffic-exporter.env
+```
 
-- repository structure
-- lightweight Grafana/Prometheus stack
-- node setup scripts
-- traffic exporter
-- demo hardware exporter
-- dashboard provisioning
-- validation scripts
-- CI workflows
-- public dashboard documentation
+Example for `ec2-b-rx`:
+
+```env
+NODE_NAME=ec2-b-rx
+NODE_ROLE=receiver
+PEER_HOST=<ec2-a-tx-private-ip>
+EXPORTER_HOST=0.0.0.0
+EXPORTER_PORT=9201
+IPERF3_PORT=5201
+PING_COUNT=5
+PING_TIMEOUT_SECONDS=2
+IPERF3_DURATION_SECONDS=5
+IPERF3_UDP_BANDWIDTH=1M
+TRAFFIC_EXPORTER_UPDATE_INTERVAL_SECONDS=30
+```
+
+---
+
+## systemd Services
+
+### Traffic Exporter
+
+File:
+
+```text
+/etc/systemd/system/traffic-exporter.service
+```
+
+```ini
+[Unit]
+Description=Traffic Exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/low-latency-telemetry-engine
+EnvironmentFile=/etc/traffic-exporter.env
+ExecStart=/home/ubuntu/low-latency-telemetry-engine/.venv/bin/python /home/ubuntu/low-latency-telemetry-engine/exporters/traffic_exporter/main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable traffic-exporter
+sudo systemctl start traffic-exporter
+```
+
+Verify:
+
+```bash
+systemctl status traffic-exporter --no-pager
+curl localhost:9201/metrics | grep traffic_exporter_up
+```
+
+### RX iperf3 Server
+
+File:
+
+```text
+/etc/systemd/system/iperf3-server.service
+```
+
+```ini
+[Unit]
+Description=iperf3 Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/iperf3 -s -p 5201
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start on RX:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable iperf3-server
+sudo systemctl start iperf3-server
+```
+
+Verify:
+
+```bash
+systemctl status iperf3-server --no-pager
+```
+
+---
+
+## End-to-End Validation
+
+From `ec2-a-tx`, test RX traffic:
+
+```bash
+iperf3 -c <ec2-b-rx-private-ip> -p 5201 -t 10
+iperf3 -c <ec2-b-rx-private-ip> -p 5201 -u -b 1M -t 10
+ping -c 5 <ec2-b-rx-private-ip>
+```
+
+Check TX metrics:
+
+```bash
+curl localhost:9201/metrics | grep -E 'traffic_exporter_up|flow_tcp_throughput_mbps|flow_udp_throughput_mbps|flow_udp_jitter_ms|flow_udp_loss_percent|flow_rtt_ms|flow_ping_packet_loss_percent|flow_test_success'
+```
+
+Check RX metrics:
+
+```bash
+curl localhost:9201/metrics | grep traffic_exporter_up
+```
+
+From `ec2-obs`, check Prometheus target health:
+
+```bash
+curl "http://localhost:9090/api/v1/query?query=up"
+```
+
+Expected healthy targets:
+
+```text
+prometheus
+ec2-a-tx-node
+ec2-b-rx-node
+ec2-a-tx-traffic
+ec2-b-rx-traffic
+hardware-telemetry-replay
+```
+
+---
+
+## Nginx Reverse Proxy
+
+Grafana is exposed through an existing Nginx reverse proxy.
+
+Expected Nginx virtual host behavior:
+
+```text
+http://obs.zetaslate.com  -> redirects to HTTPS
+https://obs.zetaslate.com -> proxies to Grafana on ec2-obs:3000
+```
+
+Example Nginx server config:
+
+```nginx
+server {
+  listen 80;
+  server_name obs.zetaslate.com;
+
+  return 301 https://$host$request_uri;
+}
+
+server {
+  listen 443 ssl;
+  server_name obs.zetaslate.com;
+
+  ssl_certificate /etc/letsencrypt/live/obs.zetaslate.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/obs.zetaslate.com/privkey.pem;
+
+  location / {
+    proxy_pass http://<ec2-obs-private-ip>:3000;
+
+    proxy_http_version 1.1;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+  }
+}
+```
+
+---
+
+## Security Group Requirements
+
+### ec2-obs
+
+Inbound:
+
+```text
+22/tcp from admin source
+3000/tcp from Nginx proxy security group
+```
+
+Outbound:
+
+```text
+9100/tcp to ec2-a-tx and ec2-b-rx
+9201/tcp to ec2-a-tx and ec2-b-rx
+80/443 to internet
+```
+
+### ec2-a-tx
+
+Inbound:
+
+```text
+22/tcp from admin source
+9100/tcp from ec2-obs
+9201/tcp from ec2-obs
+ICMP from ec2-b-rx if bidirectional ping is needed
+```
+
+Outbound:
+
+```text
+5201/tcp to ec2-b-rx
+5201/udp to ec2-b-rx
+80/443 to internet
+```
+
+### ec2-b-rx
+
+Inbound:
+
+```text
+22/tcp from admin source
+9100/tcp from ec2-obs
+9201/tcp from ec2-obs
+5201/tcp from ec2-a-tx
+5201/udp from ec2-a-tx
+ICMP from ec2-a-tx if ping metrics are desired
+```
+
+Outbound:
+
+```text
+80/443 to internet
+```
+
+---
+
+## Dashboards
+
+### Platform Overview
+
+Shows high-level service health:
+
+```text
+Prometheus target status
+Node availability
+Traffic exporter health
+Replay exporter health
+```
+
+### Two-Node Traffic Lab
+
+Shows real TX/RX traffic metrics:
+
+```text
+TCP throughput
+UDP throughput
+UDP jitter
+UDP loss
+RTT latency
+Ping packet loss
+Traffic test success
+```
+
+### PTP / Switch / FPGA Telemetry
+
+Live dashboard:
+
+```text
+https://obs.zetaslate.com/d/hardware-telemetry/ptp-switch-fpga-telemetry?orgId=1&from=now-30m&to=now&timezone=browser&refresh=10s
+```
+
+Shows replayed hardware-style telemetry:
+
+```text
+PTP offset
+PTP lock state
+Switch queue depth
+Switch packet drops
+Packet microburst state
+FPGA/NIC pipeline latency
+NIC packet counters
+```
+
+### Incident Replay
+
+Live dashboard:
+
+```text
+https://obs.zetaslate.com/d/incident-replay/incident-replay?orgId=1&from=now-15m&to=now&timezone=browser&refresh=5s
+```
+
+Shows short-window event behavior for:
+
+```text
+microbursts
+queue spikes
+packet drops
+PTP drift
+pipeline latency jumps
+```
+
+---
+
+## MVP Status
+
+Completed:
+
+```text
+Grafana deployed
+Prometheus deployed
+Nginx HTTPS reverse proxy configured
+Hardware telemetry replay exporter running
+PTP / switch / FPGA telemetry dashboard provisioned
+Incident replay dashboard provisioned
+Two-node traffic exporter implemented
+TX node deployed
+RX node deployed
+node_exporter running on traffic nodes
+iperf3 traffic path configured
+Prometheus scraping observability and traffic metrics
+```
+
+Final verification checklist:
+
+```text
+https://obs.zetaslate.com loads Grafana over HTTPS
+Prometheus target health shows all expected targets up
+traffic_exporter_up is 1 for TX and RX
+node_exporter is up for TX and RX
+TCP throughput appears in Grafana
+UDP throughput appears in Grafana
+UDP jitter appears in Grafana
+UDP loss appears in Grafana
+RTT appears in Grafana if ICMP is allowed
+hardware replay metrics appear in Grafana
+incident replay dashboard shows changing replay data
+```
+
+---
+
+## Known Deployment Lessons
+
+Issues encountered and fixed during deployment:
+
+```text
+Nginx vhost config must match the container include path
+Certbot script requires EMAIL to be set
+Do not run Windows .bat scripts inside Linux EC2 hosts
+hardware_telemetry_replay requires prometheus-client in requirements.txt
+systemd services cannot have duplicate ExecStart lines
+traffic exporter requires iperf3 installed on the host
+use python3-venv instead of version-specific python3.12-venv on newer Ubuntu images
+```
+
+These fixes are reflected in the deployment notes and should be kept in the repo scripts/docs where possible.
+
+---
+
+
