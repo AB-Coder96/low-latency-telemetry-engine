@@ -1,8 +1,8 @@
 # Low-Latency Telemetry Engine
 
-A reproducible Grafana/Prometheus observability lab for low-latency network telemetry across EC2 Linux nodes.
+A reproducible Grafana/Prometheus low-latency observability lab across EC2 Linux nodes. Implemented custom Python exporters for TCP/UDP throughput, RTT latency, UDP jitter/loss, Linux host metrics, and replayed hardware-style telemetry for PTP offset, switch drops, microbursts, and FPGA/NIC pipeline latency. Deployed Grafana behind an HTTPS Nginx reverse proxy, provisioned dashboards, and validated Prometheus scrape health across traffic and observability nodes.
 
-The platform tracks real TCP/UDP throughput, RTT latency, UDP jitter/loss, Linux host metrics, and replayed hardware-style telemetry for PTP, switch, and FPGA/NIC behavior. 
+
 
 [Live Grafana Demo](https://obs.zetaslate.com)
 
@@ -141,6 +141,7 @@ Architecture
                    │                                                                │
                    └──────────── ICMP ping / RTT / packet loss ────────────────────►│
 
+```text
 
 ## EC2 Nodes
 
